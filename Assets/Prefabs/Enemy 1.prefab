@@ -45,10 +45,8 @@ GameObject:
   - component: {fileID: 6892321409627185392}
   - component: {fileID: 5856802547659461210}
   - component: {fileID: 582382752185376877}
-  - component: {fileID: 3959701520402668766}
-  - component: {fileID: 6114691410076998872}
   m_Layer: 0
-  m_Name: Enemy
+  m_Name: Enemy 1
   m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -157,48 +155,6 @@ MonoBehaviour:
   deathRotation: {x: 90, y: 0, z: 0}
   deathRotateSpeed: 5
   bleedDamagePerSecond: 1.5
---- !u!195 &3959701520402668766
-NavMeshAgent:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 624508308750403367}
-  m_Enabled: 1
-  m_AgentTypeID: 0
-  m_Radius: 0.5
-  m_Speed: 3.5
-  m_Acceleration: 8
-  avoidancePriority: 50
-  m_AngularSpeed: 120
-  m_StoppingDistance: 0
-  m_AutoTraverseOffMeshLink: 1
-  m_AutoBraking: 1
-  m_AutoRepath: 1
-  m_Height: 2
-  m_BaseOffset: 0
-  m_WalkableMask: 4294967295
-  m_ObstacleAvoidanceType: 4
---- !u!114 &6114691410076998872
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 624508308750403367}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0faef22e6eb903540b40f8296743fd58, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EnemyAI
-  sightRange: 20
-  sightAngle: 120
-  attackRange: 12
-  patrolRadius: 15
-  patrolWait: 2
-  fireRate: 1.5
-  patrolSpeed: 2
-  chaseSpeed: 4.5
 --- !u!1 &679440186781923261
 GameObject:
   m_ObjectHideFlags: 0

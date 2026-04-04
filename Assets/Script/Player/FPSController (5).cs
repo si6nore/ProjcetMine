@@ -23,11 +23,27 @@ public class FPSController : MonoBehaviour
     public float recoilDuration = 0.05f;
     public float recoilMagnitude = 0.05f;
 
+    [Header("UI 연결")]
+    public HelpMenuUI helpMenu;
+    public InventoryUI inventoryUI;
+
+    [Header("걷기 사운드")]
+    public AudioClip walkSound;
+    public float walkSoundInterval = 0.4f;
+
+    // 걷기 전용 AudioSource (루프 제어용)
+    private AudioSource _walkAudio;
+    private float _walkSoundTimer = 0f;
+
     // 내부 상태
     private CharacterController _cc;
     private WeaponSystem _weapon;
     private float _velocityY = 0f;
     private float _pitch = 0f;
+
+    bool IsAnyUIOpen =>
+        (helpMenu != null && helpMenu.IsOpen) ||
+        (inventoryUI != null && inventoryUI.IsOpen);
 
     void Awake()
     {
@@ -36,6 +52,12 @@ public class FPSController : MonoBehaviour
 
         if (cameraHolder == null) Debug.LogError("FPSController: CameraHolder가 연결되지 않았습니다!");
         if (animator == null) animator = GetComponentInChildren<Animator>();
+
+        // 걷기 전용 AudioSource 따로 생성
+        _walkAudio = gameObject.AddComponent<AudioSource>();
+        _walkAudio.clip = walkSound;
+        _walkAudio.loop = false;
+        _walkAudio.playOnAwake = false;
     }
 
     void Start()
@@ -45,44 +67,89 @@ public class FPSController : MonoBehaviour
 
     void Update()
     {
+        HandleCursor();
         HandleLook();
         HandleMove();
         HandleGravityJump();
         HandleAnimation();
-        HandleCursor();
         HandleWeapon();
+        HandleWalkSound();
+    }
+
+    void HandleWalkSound()
+    {
+        if (walkSound == null) return;
+        if (IsAnyUIOpen || !_cc.isGrounded)
+        {
+            // UI 열리거나 공중이면 즉시 멈춤
+            _walkAudio.Stop();
+            _walkSoundTimer = 0f;
+            return;
+        }
+
+        bool isMoving =
+            Mathf.Abs(Input.GetAxisRaw("Horizontal")) > 0.1f ||
+            Mathf.Abs(Input.GetAxisRaw("Vertical")) > 0.1f;
+
+        if (isMoving)
+        {
+            _walkSoundTimer -= Time.deltaTime;
+            if (_walkSoundTimer <= 0f)
+            {
+                _walkAudio.clip = walkSound;
+                _walkAudio.Play();
+                _walkSoundTimer = walkSoundInterval;
+            }
+        }
+        else
+        {
+            // 멈추면 즉시 사운드 정지 + 타이머 초기화
+            _walkAudio.Stop();
+            _walkSoundTimer = 0f;
+        }
+    }
+
+    void HandleCursor()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (helpMenu != null)
+                helpMenu.Toggle();
+        }
+
+        if (Input.GetMouseButtonDown(0) && Cursor.lockState != CursorLockMode.Locked)
+        {
+            if (!IsAnyUIOpen)
+                LockCursor(true);
+        }
     }
 
     void HandleWeapon()
     {
         if (_weapon == null) return;
+        if (IsAnyUIOpen) return;
 
         if (Input.GetMouseButton(0))
         {
             bool fired = _weapon.TryFire(cameraHolder);
 
-            // ✅ 발사 성공했을 때만 반동 카메라 흔들림
             if (fired && cameraShake != null)
                 StartCoroutine(cameraShake.Shake(recoilDuration, recoilMagnitude));
+        }
+
+        // 마우스 버튼 뗐을 때 연사 사운드 정지
+        if (Input.GetMouseButtonUp(0))
+        {
+            _weapon.StopFireSound();
         }
 
         if (Input.GetKeyDown(KeyCode.R))
             _weapon.TryReload();
     }
 
-    void LateUpdate()
-    {
-        if (armBones == null || armBones.Length < 2) return;
-
-        if (armBones[0] != null)
-            armBones[0].localRotation *= Quaternion.Euler(_pitch, 0f, 0f);
-
-        if (armBones[1] != null)
-            armBones[1].localRotation *= Quaternion.Euler(-_pitch, 0f, 0f);
-    }
-
     void HandleLook()
     {
+        if (IsAnyUIOpen) return;
         if (Cursor.lockState != CursorLockMode.Locked) return;
 
         float mouseX = Input.GetAxisRaw("Mouse X") * sensitivity;
@@ -99,6 +166,8 @@ public class FPSController : MonoBehaviour
 
     void HandleMove()
     {
+        if (IsAnyUIOpen) return;
+
         float h = Input.GetAxis("Horizontal");
         float v = Input.GetAxis("Vertical");
         Vector3 move = transform.right * h + transform.forward * v;
@@ -114,7 +183,7 @@ public class FPSController : MonoBehaviour
         {
             _velocityY = -2f;
 
-            if (Input.GetButtonDown("Jump"))
+            if (!IsAnyUIOpen && Input.GetButtonDown("Jump"))
                 _velocityY = Mathf.Sqrt(2f * Mathf.Abs(gravity) * jumpHeight);
         }
         else
@@ -136,11 +205,15 @@ public class FPSController : MonoBehaviour
         animator.SetBool("IsRunning", isMoving);
     }
 
-    void HandleCursor()
+    void LateUpdate()
     {
-        if (Input.GetKeyDown(KeyCode.Escape)) LockCursor(false);
-        if (Input.GetMouseButtonDown(0) && Cursor.lockState != CursorLockMode.Locked)
-            LockCursor(true);
+        if (armBones == null || armBones.Length < 2) return;
+
+        if (armBones[0] != null)
+            armBones[0].localRotation *= Quaternion.Euler(_pitch, 0f, 0f);
+
+        if (armBones[1] != null)
+            armBones[1].localRotation *= Quaternion.Euler(-_pitch, 0f, 0f);
     }
 
     void LockCursor(bool locked)

@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.AI;
 using System.Collections;
+using TMPro;
 
 public class Health : MonoBehaviour
 {
@@ -18,12 +19,23 @@ public class Health : MonoBehaviour
     public GameObject gameOverPanel;
     public CameraShake cameraShake;
 
+    [Header("출혈 UI (플레이어 전용)")]
+    public TMP_Text bleedingText;
+    public Image bleedingFlashImage;
+
     [Header("적 전용 (사망 연출)")]
     public Vector3 deathRotation = new Vector3(90f, 0f, 0f);
     public float deathRotateSpeed = 5f;
 
+    [Header("출혈 설정")]
+    public float bleedDamagePerSecond = 1.5f;
+
+    private bool _isBleeding = false;
+    private Coroutine _bleedCoroutine;
+
     public float CurrentHealth => _currentHealth;
     public bool IsDead => _isDead;
+    public bool IsBleeding => _isBleeding;
 
     void Start()
     {
@@ -35,6 +47,10 @@ public class Health : MonoBehaviour
                 hitFlashImage.gameObject.SetActive(false);
             if (gameOverPanel != null)
                 gameOverPanel.SetActive(false);
+            if (bleedingText != null)
+                bleedingText.gameObject.SetActive(false);
+            if (bleedingFlashImage != null)
+                bleedingFlashImage.gameObject.SetActive(false);
         }
     }
 
@@ -50,6 +66,7 @@ public class Health : MonoBehaviour
         }
     }
 
+    // 총 피격 등 일반 데미지 → 화면 효과 O
     public void TakeDamage(float damage)
     {
         if (_isDead) return;
@@ -57,21 +74,99 @@ public class Health : MonoBehaviour
         _currentHealth -= damage;
         Debug.Log($"{gameObject.name}의 현재 체력: {_currentHealth}");
 
-        if (isPlayer)
+        if (isPlayer && damage > 0) // 힐(음수)일 때는 효과 없음
         {
-            // 화면 붉게 깜빡임
             if (hitFlashImage != null)
             {
                 StopCoroutine("FlashRedScreen");
                 StartCoroutine(FlashRedScreen());
             }
 
-            // ✅ 수정: StartCoroutine으로 카메라 흔들림
             if (cameraShake != null)
                 StartCoroutine(cameraShake.Shake(0.2f, 0.15f));
         }
 
         if (_currentHealth <= 0) Die();
+    }
+
+    // 출혈 데미지 전용 → 화면 효과 없이 체력만 감소 + 출혈 이펙트만
+    private void TakeBleedDamage(float damage)
+    {
+        if (_isDead) return;
+
+        _currentHealth -= damage;
+        Debug.Log($"{gameObject.name} 출혈 데미지: {damage}, 현재 체력: {_currentHealth}");
+
+        // 출혈 전용 화면 이펙트만 실행 (빨간 피격 효과 없음)
+        if (isPlayer && bleedingFlashImage != null)
+            StartCoroutine(FlashBleedScreen());
+
+        if (_currentHealth <= 0) Die();
+    }
+
+    public void StartBleeding()
+    {
+        if (_isDead || _isBleeding) return;
+
+        _isBleeding = true;
+
+        if (isPlayer && bleedingText != null)
+            bleedingText.gameObject.SetActive(true);
+
+        _bleedCoroutine = StartCoroutine(BleedCoroutine());
+        Debug.Log($"{gameObject.name} 출혈 시작!");
+    }
+
+    public void StopBleeding()
+    {
+        if (!_isBleeding) return;
+
+        _isBleeding = false;
+
+        if (_bleedCoroutine != null)
+        {
+            StopCoroutine(_bleedCoroutine);
+            _bleedCoroutine = null;
+        }
+
+        if (isPlayer)
+        {
+            if (bleedingText != null)
+                bleedingText.gameObject.SetActive(false);
+            if (bleedingFlashImage != null)
+                bleedingFlashImage.gameObject.SetActive(false);
+        }
+
+        Debug.Log($"{gameObject.name} 출혈 멈춤!");
+    }
+
+    IEnumerator BleedCoroutine()
+    {
+        while (_isBleeding && !_isDead)
+        {
+            yield return new WaitForSeconds(1f);
+            if (_isDead) break;
+
+            // ✅ 출혈 전용 메서드 호출 (피격 화면 효과 없음)
+            TakeBleedDamage(bleedDamagePerSecond);
+        }
+    }
+
+    IEnumerator FlashBleedScreen()
+    {
+        bleedingFlashImage.gameObject.SetActive(true);
+        float elapsed = 0f;
+        float duration = 0.3f;
+        Color bleedColor = new Color(0.6f, 0f, 0f, 0.35f);
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            bleedingFlashImage.color = Color.Lerp(bleedColor, new Color(0.6f, 0f, 0f, 0f), elapsed / duration);
+            yield return null;
+        }
+
+        bleedingFlashImage.gameObject.SetActive(false);
     }
 
     IEnumerator FlashRedScreen()
@@ -90,6 +185,7 @@ public class Health : MonoBehaviour
     void Die()
     {
         _isDead = true;
+        StopBleeding();
 
         if (isPlayer)
         {

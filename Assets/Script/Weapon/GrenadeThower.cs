@@ -68,7 +68,7 @@ public class GrenadeThower : MonoBehaviour
         }
 
         _currentGrenades--;
-        Debug.Log("Granade!: {_currentGrenades}");
+        Debug.Log($"수류탄 투척! 남은 수류탄: {_currentGrenades}");
 
         UpdateUI();
     }
@@ -77,6 +77,6 @@ public class GrenadeThower : MonoBehaviour
     void UpdateUI()
     {
         if (grenadeText != null)
-            grenadeText.text = $"Grenades: {_currentGrenades} / {maxGrenades}";
+            grenadeText.text = $"Grenade: {_currentGrenades} / {maxGrenades}";
     }
 }

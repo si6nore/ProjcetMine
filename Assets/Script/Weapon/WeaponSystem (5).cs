@@ -21,11 +21,17 @@ public class WeaponSystem : MonoBehaviour
     [Header("총알 이펙트")]
     public float bulletLineDuration = 0.05f;
 
+    [Header("사운드")]
+    public AudioClip fireSound;
+    public AudioClip reloadSound;
+
+    private AudioSource _fireAudio;
+    private AudioSource _reloadAudio;
+
     [Header("UI (선택)")]
     public TMP_Text ammoText;
     public TMP_Text reloadText;
 
-    // 내부 상태
     int _currentAmmo;
     bool _isReloading = false;
     float _nextFireTime = 0f;
@@ -34,9 +40,18 @@ public class WeaponSystem : MonoBehaviour
     {
         _currentAmmo = magazineSize;
         UpdateUI();
+
+        // 발사음 - PlayOneShot 방식 (루프 없음)
+        _fireAudio = gameObject.AddComponent<AudioSource>();
+        _fireAudio.loop = false;
+        _fireAudio.playOnAwake = false;
+
+        // 장전음
+        _reloadAudio = gameObject.AddComponent<AudioSource>();
+        _reloadAudio.loop = false;
+        _reloadAudio.playOnAwake = false;
     }
 
-    // 플레이어용 → 발사 성공 여부 반환
     public bool TryFire(Transform firePoint)
     {
         if (_isReloading) return false;
@@ -47,7 +62,6 @@ public class WeaponSystem : MonoBehaviour
         return true;
     }
 
-    // AI용 → 특정 목표 지점으로 발사
     public void TryFire(Transform firePoint, Vector3 targetPoint)
     {
         if (_isReloading) return;
@@ -58,7 +72,12 @@ public class WeaponSystem : MonoBehaviour
         ExecuteFire(new Ray(firePoint.position, dir));
     }
 
-    // 실제 발사 처리 (공통)
+    // FPSController에서 마우스 뗄 때 호출 (루프 방식 제거로 실질적으론 불필요하지만 호환성 유지)
+    public void StopFireSound()
+    {
+        // PlayOneShot 방식이라 자연스럽게 끊김, 별도 처리 불필요
+    }
+
     void ExecuteFire(Ray ray)
     {
         _currentAmmo--;
@@ -68,9 +87,12 @@ public class WeaponSystem : MonoBehaviour
         if (anim != null)
             anim.SetTrigger("Shoot");
 
+        // 발사할 때마다 한 번만 재생
+        if (fireSound != null)
+            _fireAudio.PlayOneShot(fireSound);
+
         Vector3 lineStart = muzzlePoint != null ? muzzlePoint.position : ray.origin;
 
-        // RaycastAll로 CharacterController가 있어도 HitBox 인식
         RaycastHit[] hits = Physics.RaycastAll(ray, 200f);
 
         HitBox hitBox = null;
@@ -131,6 +153,7 @@ public class WeaponSystem : MonoBehaviour
 
     public void TryReload()
     {
+        if (_isReloading) return;
         if (totalAmmo <= 0 || _currentAmmo == magazineSize) return;
         StartCoroutine(ReloadCoroutine());
     }
@@ -138,6 +161,9 @@ public class WeaponSystem : MonoBehaviour
     IEnumerator ReloadCoroutine()
     {
         _isReloading = true;
+
+        if (reloadSound != null)
+            _reloadAudio.PlayOneShot(reloadSound);
 
         if (reloadText != null)
             reloadText.text = "RELOADING...";

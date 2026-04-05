@@ -26,7 +26,29 @@ public class GrenadeExplode : MonoBehaviour
 
         // 폭발 이펙트
         if (explosionVFX != null)
-            Instantiate(explosionVFX, transform.position, Quaternion.identity);
+        {
+            GameObject vfx = Instantiate(explosionVFX, transform.position, Quaternion.identity);
+
+            // 모든 파티클 시스템 가져오기 (자식 포함)
+            ParticleSystem[] particles = vfx.GetComponentsInChildren<ParticleSystem>();
+
+            float maxDuration = 0f;
+
+            foreach (var ps in particles)
+            {
+                var main = ps.main;
+                main.loop = false;   // 🔥 강제로 루프 OFF
+                ps.Play();
+
+                // 가장 긴 지속시간 계산
+                float duration = main.duration + main.startLifetime.constantMax;
+                if (duration > maxDuration)
+                    maxDuration = duration;
+            }
+
+            // 🔥 이펙트 끝나면 자동 삭제
+            Destroy(vfx, maxDuration);
+        }
 
         // 범위 내 오브젝트 데미지
         Collider[] colliders = Physics.OverlapSphere(transform.position, explosionRadius);

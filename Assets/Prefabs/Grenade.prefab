@@ -157,7 +157,7 @@ MonoBehaviour:
   explosionRadius: 5
   explosionDamage: 80
   fuseTime: 3
-  explosionVFX: {fileID: 0}
+  explosionVFX: {fileID: 1000011797152326, guid: acf39d9f4addf294d93fa56fa373961b, type: 3}
   explosionSound: {fileID: 8300000, guid: 6292d4d6db0a0f5499be46cfa59c60ae, type: 3}
 --- !u!114 &-2758257414673462823
 MonoBehaviour:

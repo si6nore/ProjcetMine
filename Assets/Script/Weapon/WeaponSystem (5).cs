@@ -15,11 +15,16 @@ public class WeaponSystem : MonoBehaviour
     [Header("재장전 설정")]
     public float reloadTime = 2.0f;
 
-    [Header("총구 위치 (선택)")]
+    [Header("총구 위치 (필수)")]
     public Transform muzzlePoint;
 
     [Header("총알 이펙트")]
     public float bulletLineDuration = 0.05f;
+    public Material bulletLineMaterial;
+
+    [Header("머즐 플래시 이펙트")]
+    public GameObject muzzleFlashVFX;
+    public float muzzleFlashDuration = 0.1f;
 
     [Header("사운드")]
     public AudioClip fireSound;
@@ -41,42 +46,48 @@ public class WeaponSystem : MonoBehaviour
         _currentAmmo = magazineSize;
         UpdateUI();
 
-        // 발사음 - PlayOneShot 방식 (루프 없음)
+        if (muzzlePoint == null)
+            Debug.LogError($"{gameObject.name}: muzzlePoint가 연결되지 않았습니다!");
+
         _fireAudio = gameObject.AddComponent<AudioSource>();
         _fireAudio.loop = false;
         _fireAudio.playOnAwake = false;
 
-        // 장전음
         _reloadAudio = gameObject.AddComponent<AudioSource>();
         _reloadAudio.loop = false;
         _reloadAudio.playOnAwake = false;
     }
 
-    public bool TryFire(Transform firePoint)
+    // 플레이어용 - 카메라 방향을 받아서 머즐포인트에서 레이 발사
+    public bool TryFire(Transform cameraTransform)
     {
         if (_isReloading) return false;
         if (_currentAmmo <= 0) { TryReload(); return false; }
         if (Time.time < _nextFireTime) return false;
 
-        ExecuteFire(new Ray(firePoint.position, firePoint.forward));
+        if (muzzlePoint == null) return false;
+
+        // ✅ 레이 시작: 머즐포인트 위치, 방향: 카메라 forward
+        Ray ray = new Ray(muzzlePoint.position, cameraTransform.forward);
+        ExecuteFire(ray);
         return true;
     }
 
+    // AI용 - 머즐포인트에서 목표 지점으로 발사
     public void TryFire(Transform firePoint, Vector3 targetPoint)
     {
         if (_isReloading) return;
         if (_currentAmmo <= 0) { TryReload(); return; }
         if (Time.time < _nextFireTime) return;
 
-        Vector3 dir = (targetPoint - firePoint.position).normalized;
-        ExecuteFire(new Ray(firePoint.position, dir));
+        if (muzzlePoint == null) return;
+
+        Vector3 dir = (targetPoint - muzzlePoint.position).normalized;
+        Ray ray = new Ray(muzzlePoint.position, dir);
+        ExecuteFire(ray);
     }
 
-    // FPSController에서 마우스 뗄 때 호출 (루프 방식 제거로 실질적으론 불필요하지만 호환성 유지)
-    public void StopFireSound()
-    {
-        // PlayOneShot 방식이라 자연스럽게 끊김, 별도 처리 불필요
-    }
+    public void StopFireSound() { }
 
     void ExecuteFire(Ray ray)
     {
@@ -87,46 +98,51 @@ public class WeaponSystem : MonoBehaviour
         if (anim != null)
             anim.SetTrigger("Shoot");
 
-        // 발사할 때마다 한 번만 재생
         if (fireSound != null)
             _fireAudio.PlayOneShot(fireSound);
 
-        Vector3 lineStart = muzzlePoint != null ? muzzlePoint.position : ray.origin;
+        // 머즐 플래시
+        if (muzzleFlashVFX != null)
+        {
+            GameObject fx = Instantiate(muzzleFlashVFX, muzzlePoint.position, muzzlePoint.rotation);
+            Destroy(fx, muzzleFlashDuration);
+        }
 
+        // 레이캐스트
         RaycastHit[] hits = Physics.RaycastAll(ray, 200f);
 
-        HitBox hitBox = null;
+        bool hitSomething = false;
         RaycastHit closestHit = default;
         float closestDist = float.MaxValue;
+        HitBox hitBox = null;
 
         foreach (RaycastHit hit in hits)
         {
-            HitBox hb = hit.collider.GetComponent<HitBox>();
-            if (hb != null && hit.distance < closestDist)
+            if (hit.transform.root == transform.root) continue;
+            if (hit.distance < closestDist)
             {
-                hitBox = hb;
                 closestDist = hit.distance;
                 closestHit = hit;
+                hitSomething = true;
+                hitBox = hit.collider.GetComponent<HitBox>();
             }
         }
 
-        if (hitBox != null)
+        // ✅ 시작점, 끝점 전부 머즐포인트 기준
+        Vector3 lineEnd = hitSomething
+            ? closestHit.point
+            : muzzlePoint.position + ray.direction * 200f;
+
+        StartCoroutine(DrawBulletLine(muzzlePoint.position, lineEnd));
+
+        if (hitSomething)
         {
-            hitBox.OnHit(damage);
-            StartCoroutine(DrawBulletLine(lineStart, closestHit.point));
-        }
-        else
-        {
-            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-            if (hits.Length > 0)
-            {
-                Health h = hits[0].collider.GetComponentInParent<Health>();
-                if (h != null) h.TakeDamage(damage);
-                StartCoroutine(DrawBulletLine(lineStart, hits[0].point));
-            }
+            if (hitBox != null)
+                hitBox.OnHit(damage);
             else
             {
-                StartCoroutine(DrawBulletLine(lineStart, ray.origin + ray.direction * 200f));
+                Health h = closestHit.collider.GetComponentInParent<Health>();
+                if (h != null) h.TakeDamage(damage);
             }
         }
 
@@ -138,11 +154,16 @@ public class WeaponSystem : MonoBehaviour
         GameObject lineObj = new GameObject("BulletLine");
         LineRenderer lr = lineObj.AddComponent<LineRenderer>();
 
-        lr.material = new Material(Shader.Find("Sprites/Default"));
+        if (bulletLineMaterial != null)
+            lr.material = bulletLineMaterial;
+        else
+            lr.material = new Material(Shader.Find("Hidden/Internal-Colored"));
+
         lr.startColor = Color.yellow;
         lr.endColor = new Color(1f, 0.5f, 0f);
         lr.startWidth = 0.02f;
         lr.endWidth = 0.005f;
+        lr.useWorldSpace = true;
         lr.positionCount = 2;
         lr.SetPosition(0, start);
         lr.SetPosition(1, end);
